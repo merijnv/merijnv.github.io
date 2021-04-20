@@ -4,6 +4,23 @@
 
 ------
 
+## 2021-04-20 Submitted a result, more may follow!
+
+See previous post.
+
+I changed a few things around and discovered a couple of interesting programs.
+Now my hard-working program will take random programs and run them. If they run for too long, they are logged as interesting...
+
+Submitted is this result, which runs for over 18000 steps before it detects the loop of length 8482.
+
+For my simulation, illegal instructions are treated as NOPs. The code is the same as data in this system, and every interesting program (a program that runs in a long loop) is self-modifying.
+
+
+```
+bestLoop = Loop size: 8482 Program: 0xd5: ILL 5 | 0xe8: OUT 8 | 0x28: ADD 8 | 0xc4: ILL 4 | 0x77: JC 7 | 0x29: ADD 9 | 0x49: STA 9 | 0x2d: ADD d |  Repeated state: Cpu[a=0x96, d=0x0, pc=0x7, zero=false, carry=true, m=[0xd5, 0x96, 0x28, 0xc4, 0x77, 0x29, 0x49, 0x2d]]
+```
+
+----
 
 ## 2021-04-19 Ben Eater 8 bit machine explorations
 
