@@ -49,7 +49,7 @@ youtube](https://www.youtube.com/watch?v=HyznrdDSSGM&list=PLowKtXNTBypGqImE405J2
 
 It has a very limited state space: it has one general register, a program
 counter, a few bytes of memory, an 8-bit display and a few CPU state bits.  The
-total bit count is about 86 bits and the space is still two to the power of 86.
+total bit count is about 142 bits and the space is still two to the power of 142.
 That is still quite a big space. The instruction set is very limited, with
 less than sixteen instructions.
 
