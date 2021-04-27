@@ -2,6 +2,164 @@
 
 *A blog, of sorts*
 
+
+## 2021-04-27 Optimizations of the simulator
+
+### Java has an undeserved reputation
+
+Some people still consider Java to be "not so fast". This is arguably not the
+case. The optimizers within most implementations are really good. OpenJDK is
+already good and the commercially available JVMs are possibly better in quite a
+few cases. Oracle develops GraalVM, while Azul and Microsoft, IBM and Red Hat
+have their own variants.
+
+Tailoring to a modern AMD or Intel processor is hard. The instruction set of the 
+x86 has become really large and compilers and runtimes are the only way you can interact with them.
+
+I've seen cases where Java goes through (calculation) loops so quickly that I'm sure
+it uses SIMD instructions out of the box. From Java 16 onwards, if you need to,
+you can code type-safe Java in such a way that you really know what
+
+
+
+### Memory allocation is fast, as is GC
+
+Memory allocation in Java is generally very fast. Typically the JVM only
+increases a pointer (to point to the next place to allocate), writes a few
+words of meta data to the heap and returns the original value of the pointer.
+This is called 'bump the pointer' allocation.
+
+De-allocation is free from a programmers perspective: when an object becomes
+unreachable (it's reference counter becomes zero), is becomes available for
+garbage collection.
+
+Short lived objects are really fast to de-allocate. Objects are created in a
+memory space called Eden. If Eden gets full a (minor) GC is triggered. Objects
+that are still reachable are copied over to the new Eden, the pointer there
+becomes the new allocation pointer and on we go.  Objects that get copied a few
+rounds in Eden get "promoted" to the next memory space (Survivor).
+
+This may sound like a lot of copying, but if the objects are really
+short-lived, the Eden GC has not a lot of work. In current JVMs, the space is
+divided cleverly around the address space and collecting garbage has become
+fully parallelizable.
+
+Analyzing the behaviour of the simulator I concluded that each second, less
+than a handful of milliseconds were spent on GC. And I create heaps of garbage
+in the process (pun intended): each next state of the Ben Eater machine gets
+stored in its own immutable object. Judging by the GC counter, 16 cores running
+this creates over 300Mb of garbage each second!
+
+### Heap memory comes at a cost: address space and cache misses
+
+The heap of a JVM lives in RAM, which is accessed through the CPU caches.  In
+the pre-optimized version, on my machine, it is accessing memory for data at a
+rate of about 2.5G requests/second. The number of bytes fetched for each
+request is 8 according to the AMD Professor Programming Reference (PPR)
+documentation.
+
+
+### Good news and bad news
+
+As can be seen in perf output below, we quite often miss the L1 cache. About
+20% of all memory requests miss the L1Data cache. It is 'only' 32k per core on
+my Ryzen 1700 CPU.
+
+Overall, it looks like only 0.07% of the memory requests miss all caches and go
+to main memory. Apparenly, most of the time we stay in the L3 cache, even
+though more than 500Mb/s of garbage is created. Still I do not know for sure
+what to make of this CPU counter. The AMD PPR documentation is not too helpful.
+
+
+```text
+ Performance counter stats for 'java -jar target/ben-eater-sim-1.0-SNAPSHOT-jar-with-dependencies.jar':
+
+   804,784,020,712      cache-references:u
+       544,127,706      cache-misses:u            #    0.068 % of all cache refs
+ 3,831,997,271,795      L1-dcache-loads:u
+   650,546,928,348      L1-dcache-prefetches:u
+   708,160,686,499      L1-dcache-load-misses:u   #   18.48% of all L1-dcache accesses
+
+      98.504823274 seconds time elapsed
+
+    1529.546817000 seconds user
+       5.635150000 seconds sys
+ ```
+
+This run is obtained by executing all programs that start with a 0 in the first
+memory position and then simulating all 2^24 (16.777.216) possible programs.
+
+
+### Optimization strategy
+
+How to optimize this?
+
+Observations:
+* I keep an array of 8192 pointers (4 bytes each) in each thread to hold the CPU states.
+	* Flushing this effectively writes 32kb of 0s to memory, probably effectively cleaning the cache.
+* Each state has a record associated with it which gets created on the heap
+    * These records are immutable.
+	* Typically the are short-lived
+    * They need to be allocated and GC'd
+    * In all the 16M programs, most of the programs will run for only 4-16 steps.
+	* If the average is, say, 16, then we allocate 256M of these records.
+
+
+What to change:
+* Make this core allocation-free
+    * Make the state trace mutable `Objects` (rather than immutable `records`)
+    * Allocate all 8192 objects for the trace on each thread once
+    * Clean-up only the records that were used on each iteration
+
+Expected results:
+* Fewer allocations (by a lot)
+* Fewer cache misses
+* Faster execution
+
+TO BE CONTINUED...
+
+------
+
+## 2021-04-27 Gathering statistics
+
+See previous post for a description of the "machine" we're working with.
+
+The machine to analyze in this blog post is the 4 byte memory (2 bits of
+address space) variant of the Ben Easter breadboard computer. My program can
+simulate all 4 billion programs in six hours of hard work.
+
+### Statistics - number of steps before either halting or repeating
+
+My susipcion is that most of the programs are very very short lived. Many of
+the programs change nothing in the memory.  Many of the programs do not change
+the register content. The only thing changing in the machine is the program
+counter, which by design goes from 0 to 15. As soon as it reaches 0 again, the
+state gets repeated.
+
+Halting is another matter: if the program contains a `HLT` instruction and no
+jumps, the program will die really quickly.
+
+These statistics can help deduce where we are likely to find optimizations.
+Also they just serve curiosity: how many steps did we actually simulate in total?
+
+
+### Implementing stats gathering
+
+My simulator is written in Java. Why? Because I'm always trying to prove that
+Java is really fast and for me it is the language I can develop in most
+quickly.
+
+Because this problem is *embarissingly parallelizable* it spins up 16 threads
+that each run a `SimulationRunner`. These threads fetch a task, which is just
+the first `n-1` bytes of memory. It then runs all 256 programs where it changes
+the last byte of memory, before requesting the next task.
+
+Each simulation run results in a `SimulationResult` object that currently
+contains the best looping programs and best halting program.
+
+There is a static class collector `BestProgram` which keeps track of the best program so far.
+
+
 ------
 
 ## 2021-04-20 Submitted a result, more may follow!
