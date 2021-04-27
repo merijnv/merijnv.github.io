@@ -21,7 +21,6 @@ it uses SIMD instructions out of the box. From Java 16 onwards, if you need to,
 you can code type-safe Java in such a way that you really know what
 
 
-
 ### Memory allocation is fast, as is GC
 
 Memory allocation in Java is generally very fast. Typically the JVM only
@@ -30,14 +29,15 @@ words of meta data to the heap and returns the original value of the pointer.
 This is called 'bump the pointer' allocation.
 
 De-allocation is free from a programmers perspective: when an object becomes
-unreachable (it's reference counter becomes zero), is becomes available for
+unreachable (its reference counter becomes zero), it becomes available for
 garbage collection.
 
 Short lived objects are really fast to de-allocate. Objects are created in a
-memory space called Eden. If Eden gets full a (minor) GC is triggered. Objects
-that are still reachable are copied over to the new Eden, the pointer there
-becomes the new allocation pointer and on we go.  Objects that get copied a few
-rounds in Eden get "promoted" to the next memory space (Survivor).
+memory space called Eden. If Eden gets full a (minor, young generation) GC is
+triggered. Objects that are still reachable are copied over to the new Eden,
+the pointer there becomes the new allocation pointer and on we go.  Objects
+that get copied a few rounds in Eden get "promoted" to the next memory space
+(Survivor). This keeps Eden small and fast.
 
 This may sound like a lot of copying, but if the objects are really
 short-lived, the Eden GC has not a lot of work. In current JVMs, the space is
@@ -47,28 +47,29 @@ fully parallelizable.
 Analyzing the behaviour of the simulator I concluded that each second, less
 than a handful of milliseconds were spent on GC. And I create heaps of garbage
 in the process (pun intended): each next state of the Ben Eater machine gets
-stored in its own immutable object. Judging by the GC counter, 16 cores running
-this creates over 300Mb of garbage each second!
+stored in its own immutable object. Judging by the GC counteris (exposed using
+`jstat`, with 16 cores running this creates over 300Mb of garbage each second!
 
 ### Heap memory comes at a cost: address space and cache misses
 
 The heap of a JVM lives in RAM, which is accessed through the CPU caches.  In
 the pre-optimized version, on my machine, it is accessing memory for data at a
 rate of about 2.5G requests/second. The number of bytes fetched for each
-request is 8 according to the AMD Professor Programming Reference (PPR)
+request is 8 according to the AMD Processor Programming Reference (PPR)
 documentation.
 
 
 ### Good news and bad news
 
-As can be seen in perf output below, we quite often miss the L1 cache. About
-20% of all memory requests miss the L1Data cache. It is 'only' 32k per core on
-my Ryzen 1700 CPU.
+The `perf stat` output below, shows we quite often miss the L1 cache. About 20%
+of all memory requests miss the L1Data cache. It is 'only' 32k per core on my
+Ryzen 1700 CPU.
 
 Overall, it looks like only 0.07% of the memory requests miss all caches and go
 to main memory. Apparenly, most of the time we stay in the L3 cache, even
-though more than 500Mb/s of garbage is created. Still I do not know for sure
-what to make of this CPU counter. The AMD PPR documentation is not too helpful.
+though more than 300Mb/s of garbage is created. I do not know for sure what to
+make of this CPU counter. The AMD PPR documentation is not too helpful and
+neither is the perf itself.
 
 
 ```text
@@ -86,8 +87,10 @@ what to make of this CPU counter. The AMD PPR documentation is not too helpful.
        5.635150000 seconds sys
  ```
 
-This run is obtained by executing all programs that start with a 0 in the first
+This run was obtained by simulating all programs that start with a 0 in the first
 memory position and then simulating all 2^24 (16.777.216) possible programs.
+
+The output was generated using the linux tool `perf`.
 
 
 ### Optimization strategy
