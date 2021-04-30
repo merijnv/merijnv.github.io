@@ -62,11 +62,14 @@ At the start of this optimisation research I formulated the following expected /
 * Faster execution
 
 
-Garbage collection data showed fewer allocations, by a factor of about nine to ten. Total GC time was reduced from about 400-500ms to 40-50ms over multiple runs. First prediction: :check:
+Garbage collection data showed fewer allocations, by a factor of about nine to
+ten. Total GC time was reduced from about 400-500ms to 40-50ms over multiple
+runs. First prediction: :heavy_check_mark:
 
-`perf stat` shows fewer cache misses by a factor of about two. Second prediction: :check:
+`perf stat` shows fewer cache misses by a factor of about two. Second
+prediction: :heavy_check_mark:
 
-The optimization did *not* improve running time. Third prediction: :cross:
+The optimization did *not* improve running time. Third prediction: :x:
 
 #### How to approach optimization
 
