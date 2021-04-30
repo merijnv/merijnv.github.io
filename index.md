@@ -34,26 +34,27 @@ Ran the same code four times with these observations:
 
 
 
-First, there is an outlier in the pre-optimized run that I cannot explain. I've seen it quite a few times, the run sometimes takes 1.8times longer and requires lots more memory access. Weird. The optimized version does not seem to suffer from this. If I get round to it, I might try to find the cause: maybe there must be some weird interaction going on between the threads or within the memory management.
+First, there is an outlier in the pre-optimized runs that I cannot explain.
+I've seen it a few times, the run sometimes takes a lot longer and requires
+lots more memory accesses. Weird. The optimized version does not seem to suffer
+from this. If I get round to it, I might try to find the cause: maybe there is
+some weird interaction going on between the threads or something happend with
+memory management.
 
+By using an object pool for the most often created objects, the memory pressure
+becomes lower. The total time spent in garbage collection drops from 450ms per
+run to about 50ms. That was not logged for each run and not shown in the table.
+All garbage collection runs are fast young generation collections, in both the
+optimized and not optimized versions.
 
-By using an object pool for one of the most often created kind of object, the memory pressure becomes lower. Not shown in the graph above, but the total time spent in garbage collection drops from 450ms per run to about 50ms. Both are low values and all garbage collection runs are fast young generation collections.
+As I hoped, the number of cache misses reduced, from about 20% in typical runs to about 11%.
 
-As I hoped, the number of cache misses has become lower, from about 20% in typical runs to about 11%.
-
-
-The running time has *not* improved. So despite a reduction in L1 data cache misses, the program still runs about as fast as it did.
-
-
-### Other things I tried
-
-I tried running it with more threads than there are processors, but that did not change anything: this program is clearly CPU bound and memory management on the AMD Ryzen 7 platform is very good at keeping up with our heap allocations.
-
-
+However, the running time has *not* improved. So despite a reduction in L1 data
+cache misses, the program still runs about as fast as it did.
 
 ### Conclusion
 
-At the start of this optimisation research, I formulated the following expected / hoped-for results:
+At the start of this optimisation research I formulated the following expected / hoped-for results:
 
 #### Expected results
 * Fewer allocations (by a lot)
@@ -61,26 +62,36 @@ At the start of this optimisation research, I formulated the following expected 
 * Faster execution
 
 
-The first two results were as expected. Garbage collection data showed fewer allocations, by a factor of about nine to ten. Total GC time was reduced from about 400-500ms to 40-50ms over multiple runs.
+Garbage collection data showed fewer allocations, by a factor of about nine to ten. Total GC time was reduced from about 400-500ms to 40-50ms over multiple runs. First prediction: :check:
 
+`perf stat` shows fewer cache misses by a factor of about two. Second prediction: :check:
 
-The optimization did *not* improve running time. Although it looks like the running time has become more stable, that could only be certain after many runs.
+The optimization did *not* improve running time. Third prediction: :cross:
+
+#### How to approach optimization
+
+This is my approach to optimization:
+
+* first make it work,
+* take measurements,
+* analyze what could be optimized,
+* optimize,
+* take new measurements,
+* analyze and draw conclusions.
+
+Quite often, you may find that the original working solution is already quite
+fast and `good enough`. Optimization may lead to code that is less
+maintainable. That is an important tradeoff.
 
 
 #### Was it worth doing?
 
-I changed from using an immutable object to maintaining an object pool. Immutable objects are easier to reason about than an object pool. The object pool is an array of objects that are changing state. Therefore, the original version is probably easier to maintain.
-
-How to approach a problem that you may need to optimize:
-* first make it work,
-* take measurements,
-* optimize,
-* take new measurements,
-* analyze and draw your conclusions.
-
+I changed the core from using an immutable object to maintaining an object
+pool. Immutable objects are easier to reason about than an object pool.
+Therefore, the original version is easier to maintain.
  
-Finally: was it worth it? In terms of gaining more insight in how Java behaves: yes. In terms of improved runtime behaviour: no.
-
+Finally: was it worth it? In terms of gaining more insight in how Java behaves:
+yes. In terms of improved runtime behaviour: no.
 
 
 ----
