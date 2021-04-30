@@ -14,7 +14,7 @@ This post, let's see if my optimizations are going to bear fruit.
     * [x] Allocate all objects for the trace on each thread once
     * [x] Clean-up only the records that were used on each iteration (if required)
 
-### Analizing the results
+### Analyzing the results
 
 Refactoring to create what is effectively a thread local objectpool was easy enough.
 Unit tests still work and the result of the running program is the same.
