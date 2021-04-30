@@ -2,8 +2,91 @@
 
 *A blog, of sorts*
 
+## 2021-04-30 Optimizations for the simulator
 
-## 2021-04-27 Optimizations of the simulator
+In the previous post, I stopped at creating the TODO list for optimizing.
+This post, let's see if my optimizations are going to bear fruit.
+
+
+### What to change:
+* Make this core allocation-free
+    * [x] Make the state trace mutable `Objects` (rather than immutable `records`)
+    * [x] Allocate all objects for the trace on each thread once
+    * [x] Clean-up only the records that were used on each iteration (if required)
+
+### Analizing the results
+
+Refactoring to create what is effectively a thread local objectpool was easy enough.
+Unit tests still work and the result of the running program is the same.
+
+Ran the same code four times with these observations:
+
+|                  | running time    | L1D accesses | misses  | percentage cache misses |
+|------------------|-----------------|--------------|---------|-------------------------|
+| Pre-optimization | 99633ms         | 3.8T         | 712G    | 18.5%                   |
+|                  | 99276ms         | 3.8T         | 711G    | 18.5%                   |
+|                  | 185325ms ???    | 9.1T ???     | 707G    | 7.8%                    |
+|                  | 92672ms         | 3.0T         | 713G    | 23.3%                   |
+| Optimized        | 99953ms         | 4.0T         | 444G    | 11.1%                   |
+|                  | 98505ms         | 3.9T         | 447G    | 11.1%                   |
+|                  | 102194ms        | 4.0T         | 449G    | 11.2%                   |
+|                  | 100968ms        | 3.9T         | 437G    | 11.0%                   |
+
+
+
+First, there is an outlier in the pre-optimized run that I cannot explain. I've seen it quite a few times, the run sometimes takes 1.8times longer and requires lots more memory access. Weird. The optimized version does not seem to suffer from this. If I get round to it, I might try to find the cause: maybe there must be some weird interaction going on between the threads or within the memory management.
+
+
+By using an object pool for one of the most often created kind of object, the memory pressure becomes lower. Not shown in the graph above, but the total time spent in garbage collection drops from 450ms per run to about 50ms. Both are low values and all garbage collection runs are fast young generation collections.
+
+As I hoped, the number of cache misses has become lower, from about 20% in typical runs to about 11%.
+
+
+The running time has *not* improved. So despite a reduction in L1 data cache misses, the program still runs about as fast as it did.
+
+
+### Other things I tried
+
+I tried running it with more threads than there are processors, but that did not change anything: this program is clearly CPU bound and memory management on the AMD Ryzen 7 platform is very good at keeping up with our heap allocations.
+
+
+
+### Conclusion
+
+At the start of this optimisation research, I formulated the following expected / hoped-for results:
+
+#### Expected results
+* Fewer allocations (by a lot)
+* Fewer cache misses
+* Faster execution
+
+
+The first two results were as expected. Garbage collection data showed fewer allocations, by a factor of about nine to ten. Total GC time was reduced from about 400-500ms to 40-50ms over multiple runs.
+
+
+The optimization did *not* improve running time. Although it looks like the running time has become more stable, that could only be certain after many runs.
+
+
+#### Was it worth doing?
+
+I changed from using an immutable object to maintaining an object pool. Immutable objects are easier to reason about than an object pool. The object pool is an array of objects that are changing state. Therefore, the original version is probably easier to maintain.
+
+How to approach a problem that you may need to optimize:
+* first make it work,
+* take measurements,
+* optimize,
+* take new measurements,
+* analyze and draw your conclusions.
+
+ 
+Finally: was it worth it? In terms of gaining more insight in how Java behaves: yes. In terms of improved runtime behaviour: no.
+
+
+
+----
+
+
+## 2021-04-27 Optimizations for the simulator
 
 ### Java has an undeserved reputation
 
